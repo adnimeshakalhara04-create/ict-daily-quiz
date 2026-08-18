@@ -1,0 +1,3 @@
+[build]
+  command = "if [ -f ict-daily-quiz-ready.zip ]; then unzip -o ict-daily-quiz-ready.zip -d .; fi"
+  publish = "."
