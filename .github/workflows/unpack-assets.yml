@@ -1,0 +1,34 @@
+name: Unpack Daily Quiz assets
+
+on:
+  push:
+    paths:
+      - 'ict-daily-quiz-ready.zip'
+      - '.github/workflows/unpack-assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack image assets
+        run: |
+          rm -rf daily_assets
+          tmp="$(mktemp -d)"
+          unzip -q ict-daily-quiz-ready.zip -d "$tmp"
+          test -d "$tmp/daily_assets"
+          cp -a "$tmp/daily_assets" ./daily_assets
+          test "$(find daily_assets -type f | wc -l)" -eq 170
+      - name: Commit extracted assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add daily_assets
+          if ! git diff --cached --quiet; then
+            git commit -m "Unpack Daily Quiz image assets"
+            git push
+          fi
