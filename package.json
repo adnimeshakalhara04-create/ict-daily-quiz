@@ -1,0 +1,14 @@
+{
+  "name": "ict-daily-quiz",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "rm -rf public && mkdir -p public && cp app.js styles.css public/ && cp -R daily_assets public/daily_assets && next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "15.5.21",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
+}
