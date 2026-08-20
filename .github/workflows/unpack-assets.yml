@@ -1,9 +1,11 @@
-name: Unpack Daily Quiz assets
+name: Build Daily Quiz assets
 
 on:
   push:
     paths:
       - 'ict-daily-quiz-ready.zip'
+      - '.quiz_sources/**'
+      - 'scripts/prepare_quiz18.py'
       - '.github/workflows/unpack-assets.yml'
   workflow_dispatch:
 
@@ -11,18 +13,18 @@ permissions:
   contents: write
 
 jobs:
-  unpack:
+  build-assets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify deploy-ready ZIP
+      - name: Install crop dependencies
+        run: python -m pip install --disable-pip-version-check pymupdf pillow
+
+      - name: Verify and unpack existing assets
         run: |
           test -f ict-daily-quiz-ready.zip
           unzip -t ict-daily-quiz-ready.zip >/dev/null
-
-      - name: Unpack image assets
-        run: |
           rm -rf daily_assets
           tmp="$(mktemp -d)"
           unzip -q ict-daily-quiz-ready.zip -d "$tmp"
@@ -30,12 +32,25 @@ jobs:
           cp -a "$tmp/daily_assets" ./daily_assets
           test "$(find daily_assets -type f | wc -l)" -eq 170
 
-      - name: Commit extracted assets
+      - name: Generate verified Quiz 18 crops and update app data
+        run: python scripts/prepare_quiz18.py
+
+      - name: Verify Quiz 18 output
+        run: |
+          test "$(find daily_assets -type f | wc -l)" -eq 180
+          test -f daily_assets/questions/quiz-18/q-01.png
+          test -f daily_assets/questions/quiz-18/q-05.png
+          test -f daily_assets/markings/quiz-18/q-01.png
+          test -f daily_assets/markings/quiz-18/q-05.png
+          grep -q 'Array.from({length:18}' app.js
+          grep -q '\[2,1,2,2,1\]' app.js
+
+      - name: Commit generated assets and app update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add daily_assets
+          git add daily_assets app.js
           if ! git diff --cached --quiet; then
-            git commit -m "Unpack verified Daily Quiz image assets"
+            git commit -m "Add verified Daily Quiz 18"
             git push
           fi
