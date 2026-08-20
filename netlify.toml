@@ -1,3 +1,14 @@
 [build]
-  command = "if [ -f ict-daily-quiz-ready.zip ]; then unzip -o ict-daily-quiz-ready.zip -d .; fi"
+  command = """
+    rm -rf daily_assets _asset_unpack
+    mkdir -p daily_assets/questions daily_assets/markings _asset_unpack
+    unzip -q -o daily-quiz-cropped-images-under-25MB.zip -d _asset_unpack
+    for n in $(seq -w 1 17); do
+      mkdir -p "daily_assets/questions/quiz-$n" "daily_assets/markings/quiz-$n"
+      cp "_asset_unpack/Daily Quiz Cropped Images/Quiz $n/Questions/"*.webp "daily_assets/questions/quiz-$n/"
+      cp "_asset_unpack/Daily Quiz Cropped Images/Quiz $n/Markings/"*.webp "daily_assets/markings/quiz-$n/"
+    done
+    sed -i 's/\\.png/\\.webp/g' app.js
+    test "$(find daily_assets -type f | wc -l)" -eq 170
+  """
   publish = "."
