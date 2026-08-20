@@ -3,7 +3,7 @@ name: Unpack Daily Quiz assets
 on:
   push:
     paths:
-      - 'daily-assets-fixed.b64.txt'
+      - 'ict-daily-quiz-ready.zip'
       - '.github/workflows/unpack-assets.yml'
   workflow_dispatch:
 
@@ -15,20 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Decode and verify asset pack
+
+      - name: Verify deploy-ready ZIP
         run: |
-          test -f daily-assets-fixed.b64.txt
-          base64 --decode daily-assets-fixed.b64.txt > /tmp/daily-fixed.zip
-          echo "d7dfef680f8bf3b9f49aa2f5be12cb891f9b34f0a095b48d9ab66a8bb5e10565  /tmp/daily-fixed.zip" | sha256sum -c -
-          unzip -t /tmp/daily-fixed.zip >/dev/null
+          test -f ict-daily-quiz-ready.zip
+          unzip -t ict-daily-quiz-ready.zip >/dev/null
+
       - name: Unpack image assets
         run: |
           rm -rf daily_assets
           tmp="$(mktemp -d)"
-          unzip -q /tmp/daily-fixed.zip -d "$tmp"
+          unzip -q ict-daily-quiz-ready.zip -d "$tmp"
           test -d "$tmp/daily_assets"
           cp -a "$tmp/daily_assets" ./daily_assets
           test "$(find daily_assets -type f | wc -l)" -eq 170
+
       - name: Commit extracted assets
         run: |
           git config user.name "github-actions[bot]"
