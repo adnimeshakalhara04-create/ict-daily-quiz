@@ -3,7 +3,7 @@ name: Daily Quiz PDF Pipeline
 on:
   push:
     paths:
-      - 'incoming/**/*.pdf'
+      - 'incoming/**'
       - 'scripts/process_incoming.py'
       - 'daily-quiz-cropped-images-under-25MB.zip'
       - '.github/workflows/unpack-assets.yml'
