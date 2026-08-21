@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "buildCommand": "rm -rf site-build && mkdir -p site-build && cp site/index.html site/app.js styles.css site-build/",
+  "outputDirectory": "site-build",
+  "cleanUrls": true
+}
