@@ -160,6 +160,49 @@ def line_text(line: dict) -> str:
     return "".join(span.get("text", "") for span in line.get("spans", []))
 
 
+META_PATTERNS = (
+    "2028 quiz series",
+    "#ictfromabc",
+    "all rights reserved",
+    "information and communication technology",
+    "ravindu bandaranayake",
+)
+
+
+def is_metadata_line(text: str) -> bool:
+    clean = " ".join(text.lower().split())
+    if not clean:
+        return True
+    if any(token in clean for token in META_PATTERNS):
+        return True
+    if re.fullmatch(r"-?\s*\d+\s*-?", clean):
+        return True
+    return False
+
+
+def meaningful_content_bottom(page: fitz.Page, top: float, hard_bottom: float) -> float:
+    max_y = top
+    blocks = page.get_text("dict").get("blocks", [])
+    for block in blocks:
+        if block.get("type") == 0:
+            for line in block.get("lines", []):
+                text = line_text(line).strip()
+                if is_metadata_line(text):
+                    continue
+                bbox = line.get("bbox") or (0, 0, 0, 0)
+                y0, y1 = float(bbox[1]), float(bbox[3])
+                if y1 <= top + 1 or y0 >= hard_bottom - 1:
+                    continue
+                max_y = max(max_y, min(y1, hard_bottom))
+        elif block.get("type") == 1:
+            bbox = block.get("bbox") or (0, 0, 0, 0)
+            y0, y1 = float(bbox[1]), float(bbox[3])
+            if y1 <= top + 1 or y0 >= hard_bottom - 1:
+                continue
+            max_y = max(max_y, min(y1, hard_bottom))
+    return min(hard_bottom, max_y + 12)
+
+
 def find_question_starts(doc: fitz.Document) -> list[Start]:
     found: dict[int, Start] = {}
     for page_number, page in enumerate(doc):
@@ -202,9 +245,10 @@ def build_crop(doc: fitz.Document, start: Start, next_start: Start | None) -> Im
         page = doc[page_number]
         top = max(0, start.y0 - BOUNDARY_PAD_PT) if page_number == start.page else CONTINUATION_TOP_PT
         if next_start and page_number == next_start.page:
-            bottom = next_start.y0 - BOUNDARY_PAD_PT
+            hard_bottom = next_start.y0 - BOUNDARY_PAD_PT
         else:
-            bottom = page.rect.height - BOTTOM_MARGIN_PT
+            hard_bottom = page.rect.height - BOTTOM_MARGIN_PT
+        bottom = meaningful_content_bottom(page, top, hard_bottom)
         if bottom <= top + 3:
             continue
         pieces.append(render_clip(page, page_clip(page, top, bottom)))
