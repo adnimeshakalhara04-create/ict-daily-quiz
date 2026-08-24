@@ -2,7 +2,7 @@
   "name": "ict-daily-quiz",
   "private": true,
   "scripts": {
-    "build": "python -m pip install --disable-pip-version-check pymupdf pillow && python scripts/process_incoming.py && mkdir -p site && cp styles.css site/styles.css && cp quiz-data.json site/quiz-data.json && rm -rf site/daily_assets && cp -R daily_assets site/daily_assets && sed -i \"s|const MANIFEST_URL = .*|const MANIFEST_URL = '/quiz-data.json';|\" site/app.js && sed -i \"s|const ASSET_BASE = .*|const ASSET_BASE = '/daily_assets';|\" site/app.js",
+    "build": "python -m pip install --disable-pip-version-check pymupdf pillow && python scripts/process_incoming.py && rm -rf site-build && mkdir -p site-build && cp site/index.html site/app.js styles.css quiz-data.json site-build/ && cp -R daily_assets site-build/daily_assets && sed -i \"s|const MANIFEST_URL = .*|const MANIFEST_URL = '/quiz-data.json';|\" site-build/app.js && sed -i \"s|const ASSET_BASE = .*|const ASSET_BASE = '/daily_assets';|\" site-build/app.js",
     "start": "echo static-site"
   },
   "dependencies": {}
