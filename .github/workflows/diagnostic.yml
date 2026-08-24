@@ -1,0 +1,25 @@
+name: Actions Diagnostic
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove runner and write permission
+        run: |
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > actions-diagnostic.txt
+          echo 'GitHub Actions runner OK' >> actions-diagnostic.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add actions-diagnostic.txt
+          git commit -m 'Actions diagnostic passed'
+          git push
