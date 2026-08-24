@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "rm -rf public && mkdir -p public && cp app.js styles.css public/ && cp -R daily_assets public/daily_assets && next build",
+    "build": "python -m pip install --disable-pip-version-check pymupdf pillow && python scripts/process_incoming.py && rm -rf public && mkdir -p public && cp app.js styles.css quiz-data.json public/ && cp -R daily_assets public/daily_assets && next build",
     "start": "next start"
   },
   "dependencies": {
