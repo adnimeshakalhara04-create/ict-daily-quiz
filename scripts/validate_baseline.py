@@ -23,12 +23,16 @@ with tempfile.TemporaryDirectory() as td:
             with Image.open(path) as im:
                 im.verify()
         except Exception as exc:
-            bad.append((str(path.relative_to(out)), str(exc)))
+            data = path.read_bytes()
+            bad.append((str(path.relative_to(out)), str(exc), len(data), data[:64].hex(), data[-64:].hex(), data.find(b'RIFF'), data.find(b'WEBP'), sum(1 for b in data if b)))
 
 print(f'Baseline image scan: {count} image files')
 if bad:
     print(f'CORRUPT_IMAGE_COUNT={len(bad)}')
-    for name, error in bad:
+    for name, error, size, head, tail, riff, webp, nonzero in bad:
         print(f'CORRUPT: {name} :: {error}')
+        print(f'  SIZE={size} NONZERO={nonzero} RIFF_AT={riff} WEBP_AT={webp}')
+        print(f'  HEAD64={head}')
+        print(f'  TAIL64={tail}')
     raise SystemExit(2)
 print('BASELINE_IMAGES_OK')
