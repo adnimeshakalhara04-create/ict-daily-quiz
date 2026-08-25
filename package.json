@@ -1,9 +1,8 @@
 {
-  "name": "ict-daily-quiz",
+  "name": "ict-lesson12-source-quiz",
   "private": true,
   "scripts": {
-    "build": "python -m pip install --break-system-packages --disable-pip-version-check pymupdf pillow && python scripts/process_incoming.py && rm -rf site-build && mkdir -p site-build && cp site/index.html site/app.js styles.css quiz-data.json site-build/ && cp -R daily_assets site-build/daily_assets && sed -i \"s|const MANIFEST_URL = .*|const MANIFEST_URL = '/quiz-data.json';|\" site-build/app.js && sed -i \"s|const ASSET_BASE = .*|const ASSET_BASE = '/daily_assets';|\" site-build/app.js",
-    "start": "echo static-site"
-  },
-  "dependencies": {}
+    "build": "rm -rf site-build && mkdir -p site-build && cp index.html styles-l12.css app-l12.js quiz-data-1.js quiz-data-2.js quiz-data-3.js site-build/",
+    "start": "echo static"
+  }
 }
