@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import sys
 from pathlib import Path
 from PIL import ImageFile
 
-# The legacy baseline contains one truncated PNG stream (Quiz 14 marking Q02).
-# Pillow can decode the available source pixels; the generated WEBP is then
-# validated by the normal source pipeline before deployment.
+# One legacy repair stream is truncated at the container level. Pillow can
+# decode the available source pixels; the normal asset verifier checks the
+# generated output before deployment.
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,5 +31,19 @@ def verified_q14_bytes() -> bytes:
     return data
 
 
+# Preserve already-verified WEBP crops byte-for-byte instead of recompressing
+# all baseline images on every Vercel build. Non-WEBP inputs still use the
+# original source conversion routine.
+_original_convert = module.convert_to_webp
+
+def fast_convert(src: Path, dst: Path) -> None:
+    if src.suffix.lower() == ".webp":
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+    else:
+        _original_convert(src, dst)
+
+
 module.repair_q14_bytes = verified_q14_bytes
+module.convert_to_webp = fast_convert
 module.main()
