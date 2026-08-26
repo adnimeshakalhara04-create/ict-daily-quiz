@@ -2,7 +2,7 @@
   "name": "ict-lesson12-source-quiz",
   "private": true,
   "scripts": {
-    "build": "rm -rf site-build && mkdir -p site-build && cp index.html styles-l12.css app-l12.js quiz-data-1.js quiz-data-2.js quiz-data-3.js site-build/",
+    "build": "python -m pip install --disable-pip-version-check pymupdf pillow && python scripts/process_incoming.py && rm -rf site-build && mkdir -p site-build && cp index.html styles-l12.css app-final.js quiz-data-1.js quiz-data-2.js quiz-data-3.js quiz-data.json site-build/ && cp -R daily_assets site-build/",
     "start": "echo static"
   }
 }
