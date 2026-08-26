@@ -3,6 +3,12 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from PIL import ImageFile
+
+# The legacy baseline contains one truncated PNG stream (Quiz 14 marking Q02).
+# Pillow can decode the available source pixels; the generated WEBP is then
+# validated by the normal source pipeline before deployment.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "process_incoming.py"
@@ -20,7 +26,7 @@ spec.loader.exec_module(module)
 def verified_q14_bytes() -> bytes:
     data = REPAIR.read_bytes()
     if len(data) < 1000 or not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise RuntimeError("Verified Quiz 14 marking PNG is missing or invalid")
+        raise RuntimeError("Quiz 14 marking repair PNG is missing or invalid")
     return data
 
 
