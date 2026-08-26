@@ -2,7 +2,7 @@
   "name": "ict-daily-quiz",
   "private": true,
   "scripts": {
-    "build": "python -m pip install --break-system-packages --disable-pip-version-check pymupdf pillow && python scripts/process_incoming.py && rm -rf site-build && mkdir -p site-build && cp site/index.html site/app.js styles.css quiz-data.json site-build/ && cp -R daily_assets site-build/daily_assets && sed -i \"s|const MANIFEST_URL = .*|const MANIFEST_URL = '/quiz-data.json';|\" site-build/app.js && sed -i \"s|const ASSET_BASE = .*|const ASSET_BASE = '/daily_assets';|\" site-build/app.js",
+    "build": "python -m pip install --break-system-packages --disable-pip-version-check pymupdf pillow && python -c \"from pathlib import Path; p=Path('repairs/q14-marking-q02.part4.b64'); s=p.read_text().strip(); p.write_text(s + '=' * (-len(s) % 4))\" && python scripts/process_incoming.py && rm -rf site-build && mkdir -p site-build && cp site/index.html site/app.js styles.css quiz-data.json site-build/ && cp -R daily_assets site-build/daily_assets && sed -i \"s|const MANIFEST_URL = .*|const MANIFEST_URL = '/quiz-data.json';|\" site-build/app.js && sed -i \"s|const ASSET_BASE = .*|const ASSET_BASE = '/daily_assets';|\" site-build/app.js",
     "start": "echo static-site"
   },
   "dependencies": {}
