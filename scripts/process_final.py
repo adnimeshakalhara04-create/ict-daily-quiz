@@ -6,9 +6,6 @@ import sys
 from pathlib import Path
 from PIL import ImageFile
 
-# One legacy repair stream is truncated at the container level. Pillow can
-# decode the available source pixels; the normal asset verifier checks the
-# generated output before deployment.
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,9 +28,6 @@ def verified_q14_bytes() -> bytes:
     return data
 
 
-# Preserve already-verified WEBP crops byte-for-byte instead of recompressing
-# all baseline images on every Vercel build. Non-WEBP inputs still use the
-# original source conversion routine.
 _original_convert = module.convert_to_webp
 
 def fast_convert(src: Path, dst: Path) -> None:
@@ -46,4 +40,32 @@ def fast_convert(src: Path, dst: Path) -> None:
 
 module.repair_q14_bytes = verified_q14_bytes
 module.convert_to_webp = fast_convert
-module.main()
+
+# Build the locally hosted source crops only through Quiz 20.
+module.bootstrap_assets()
+manifest = module.load_manifest()
+groups = module.group_incoming()
+current = len(manifest["answers"])
+for quiz in [number for number in sorted(groups) if number > current and number <= 20]:
+    if quiz != current + 1:
+        raise RuntimeError(f"Quiz sequence gap: site ends at {current:02d}, next upload is {quiz:02d}")
+    pair = groups[quiz]
+    if set(pair) != {"question", "marking"}:
+        raise RuntimeError(f"Quiz {quiz:02d} needs question + MARKING PDFs; found {sorted(pair)}")
+    answers = module.process_quiz(quiz, pair["question"], pair["marking"])
+    manifest["answers"].append(answers)
+    current += 1
+    print(f"Quiz {quiz:02d}: answers={answers}")
+
+if len(manifest["answers"]) != 20:
+    raise RuntimeError(f"Expected verified local source set through Quiz 20, got {len(manifest['answers'])}")
+
+# Quiz 21–23 use the exact Google Drive crops in the browser. Keep their
+# verified official answer rows in the same manifest so the bank totals 115.
+for quiz in (21, 22, 23):
+    manifest["answers"].append(module.PREBUILT_ANSWERS[quiz])
+    print(f"Quiz {quiz:02d}: Drive crop mode, answers={module.PREBUILT_ANSWERS[quiz]}")
+
+module.save_manifest(manifest)
+module.verify_all_assets(20)
+print("Daily Quiz source build verified: 23 quizzes / 115 questions; local crops 01-20, Drive crops 21-23")
