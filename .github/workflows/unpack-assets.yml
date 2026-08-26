@@ -1,5 +1,6 @@
 name: Daily Quiz PDF Pipeline
 
+# Triggered to rebuild and verify Quiz 01–23 source crops.
 on:
   push:
     paths:
