@@ -42,7 +42,6 @@ def download_pdf(file_id: str) -> dict:
     target.unlink(missing_ok=True)
     last_error = None
 
-    # gdown handles Google Drive confirmation/cookie flows that plain HTTP misses.
     try:
         result = gdown.download(id=file_id, output=str(target), quiet=True)
         if result and valid_pdf(target):
@@ -52,7 +51,7 @@ def download_pdf(file_id: str) -> dict:
                 f"gdown returned non-PDF content ({target.stat().st_size} bytes)"
             )
             target.unlink(missing_ok=True)
-    except Exception as exc:  # gdown has several provider-specific exception types
+    except Exception as exc:
         last_error = exc
         target.unlink(missing_ok=True)
 
@@ -76,21 +75,32 @@ def download_pdf(file_id: str) -> dict:
                 last_error = exc
         time.sleep(1.5 * (attempt + 1))
 
-    raise RuntimeError(f"Could not mirror source {file_id}: {last_error}")
+    raise RuntimeError(str(last_error or "unknown Drive download error"))
 
 
 results = []
+failures = []
 with ThreadPoolExecutor(max_workers=min(4, len(ids))) as pool:
     futures = {pool.submit(download_pdf, file_id): file_id for file_id in ids}
     for future in as_completed(futures):
-        result = future.result()
-        results.append(result)
-        print(f"Local source ready: {result['id']} ({result['bytes']} bytes)")
+        file_id = futures[future]
+        try:
+            result = future.result()
+            results.append(result)
+            print(f"Local source ready: {result['id']} ({result['bytes']} bytes)")
+        except Exception as exc:
+            failures.append({"id": file_id, "error": str(exc)})
+            print(f"LOCAL SOURCE MISSING: {file_id} :: {exc}")
 
 manifest = {
     "source": "Lesson 1 + 2 quiz-data Drive file IDs",
+    "requested": len(ids),
     "count": len(results),
+    "missingCount": len(failures),
     "files": sorted(results, key=lambda item: item["id"]),
+    "missing": sorted(failures, key=lambda item: item["id"]),
 }
 (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-print(f"Mirrored {len(results)} Lesson 1/2 source PDFs into {OUT}")
+print(f"Mirrored {len(results)}/{len(ids)} Lesson 1/2 source PDFs into {OUT}")
+if failures:
+    print("Protected/unavailable source IDs: " + ", ".join(item["id"] for item in sorted(failures, key=lambda item: item["id"])))
