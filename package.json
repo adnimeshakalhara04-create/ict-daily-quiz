@@ -1,8 +1,11 @@
 {
   "name": "ict-lesson12-source-quiz",
   "private": true,
+  "dependencies": {
+    "sinhala-unicode-coverter": "1.0.2"
+  },
   "scripts": {
-    "build": "python -m pip install --break-system-packages --disable-pip-version-check pymupdf pillow gdown && python scripts/process_final.py && rm -rf site-build && mkdir -p site-build/sources && cp index.html styles-l12.css app-final.js essay-local.js past-crops.js quiz-data-1.js quiz-data-2.js quiz-data-3.js quiz-data.json site-build/ && cp -R daily_assets site-build/ && cp -R bundled_sources/. site-build/sources/ && python scripts/fetch_lesson_sources.py site-build/sources && python scripts/render_essay_pages.py site-build",
+    "build": "python -m pip install --break-system-packages --disable-pip-version-check pymupdf pillow gdown && python scripts/process_final.py && rm -rf site-build && mkdir -p site-build/sources && cp index.html styles-l12.css app-final.js essay-local.js past-crops.js quiz-data-1.js quiz-data-2.js quiz-data-3.js quiz-data.json site-build/ && cp -R daily_assets site-build/ && cp -R bundled_sources/. site-build/sources/ && python scripts/fetch_lesson_sources.py site-build/sources && node scripts/build_essay_html.cjs site-build",
     "start": "echo static"
   }
 }
