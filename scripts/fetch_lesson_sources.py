@@ -9,6 +9,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import gdown
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "site-build" / "sources"
 OUT.mkdir(parents=True, exist_ok=True)
@@ -28,19 +30,37 @@ headers = {
 }
 
 
+def valid_pdf(path: Path) -> bool:
+    return path.exists() and path.stat().st_size > 1000 and path.read_bytes()[:5] == b"%PDF-"
+
+
 def download_pdf(file_id: str) -> dict:
     target = OUT / f"{file_id}.pdf"
-    if target.exists() and target.stat().st_size > 1000:
-        head = target.read_bytes()[:5]
-        if head == b"%PDF-":
-            return {"id": file_id, "bytes": target.stat().st_size, "cached": True}
+    if valid_pdf(target):
+        return {"id": file_id, "bytes": target.stat().st_size, "cached": True}
+
+    target.unlink(missing_ok=True)
+    last_error = None
+
+    # gdown handles Google Drive confirmation/cookie flows that plain HTTP misses.
+    try:
+        result = gdown.download(id=file_id, output=str(target), quiet=True)
+        if result and valid_pdf(target):
+            return {"id": file_id, "bytes": target.stat().st_size, "cached": False}
+        if target.exists():
+            last_error = RuntimeError(
+                f"gdown returned non-PDF content ({target.stat().st_size} bytes)"
+            )
+            target.unlink(missing_ok=True)
+    except Exception as exc:  # gdown has several provider-specific exception types
+        last_error = exc
+        target.unlink(missing_ok=True)
 
     urls = [
         f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t",
         f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t",
     ]
-    last_error = None
-    for attempt in range(3):
+    for attempt in range(2):
         for url in urls:
             try:
                 req = urllib.request.Request(url, headers=headers)
@@ -50,11 +70,12 @@ def download_pdf(file_id: str) -> dict:
                     target.write_bytes(data)
                     return {"id": file_id, "bytes": len(data), "cached": False}
                 last_error = RuntimeError(
-                    f"Drive source {file_id} did not return a PDF (received {len(data)} bytes)"
+                    f"Drive source returned non-PDF content ({len(data)} bytes)"
                 )
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
                 last_error = exc
         time.sleep(1.5 * (attempt + 1))
+
     raise RuntimeError(f"Could not mirror source {file_id}: {last_error}")
 
 
