@@ -23,9 +23,14 @@ function patch(){
       frame.dataset.cropId=id;
       frame.title=isMark?'Original marking crop':'Original question crop';
     }
-    label.textContent=isMark?'Original marking crop':'Original question crop';
+    const nextLabel=isMark?'Original marking crop':'Original question crop';
+    if(label.textContent!==nextLabel)label.textContent=nextLabel;
     const link=card.querySelector('.source-link');
-    if(link){link.href=dview(id);link.textContent='Open crop ↗';}
+    if(link){
+      const href=dview(id);
+      if(link.href!==href)link.href=href;
+      if(link.textContent!=='Open crop ↗')link.textContent='Open crop ↗';
+    }
   });
 }
 new MutationObserver(patch).observe(document.documentElement,{subtree:true,childList:true});
