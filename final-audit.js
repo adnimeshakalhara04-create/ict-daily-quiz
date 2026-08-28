@@ -57,12 +57,16 @@ function viewSource(r){
 function patchHome(){
   const home=$('.home'); if(!home)return;
   if(home!==lastHome){lastHome=home;window.scrollTo(0,0)}
-  const stats=$$('.stats>div',home); if(stats.length>=4&&stats[0].dataset.audited!=='1'){
+  if(home.dataset.finalAuditHome==='1')return;
+  home.dataset.finalAuditHome='1';
+  const stats=$$('.stats>div',home);
+  if(stats.length>=4){
     const rows=[['347','TOTAL MCQ','all question instances'],['22','DAY PAPERS','132 questions'],['23','DAILY QUIZZES','115 questions'],['100','PAST PAPER MCQ','Lesson 1 + 2']];
-    stats.slice(0,4).forEach((el,i)=>{el.dataset.audited='1';el.innerHTML=`<strong>${rows[i][0]}</strong><span>${rows[i][1]}</span><em>${rows[i][2]}</em>`});
+    stats.slice(0,4).forEach((el,i)=>{el.innerHTML=`<strong>${rows[i][0]}</strong><span>${rows[i][1]}</span><em>${rows[i][2]}</em>`});
   }
-  const res=$('#res',home); if(res){res.textContent='Essay + Theory';res.setAttribute('aria-label','Open 28 Essay pages and 8 Theory documents')}
-  $$('.paper-card',home).forEach(card=>{const h=$('h3',card),c=$('.paper-count',card);if(!h||!c)return;const t=h.textContent.trim();if(t==='Day Papers')c.textContent='22 papers • 132 Q';else if(t==='Daily Quiz')c.textContent='23 quizzes • 115 Q';else if(t==='Lesson 1 Past Papers')c.textContent='44 MCQ';else if(t==='Lesson 2 Past Papers')c.textContent='56 MCQ'});
+  const res=$('#res',home);
+  if(res){if(res.textContent!=='Essay + Theory')res.textContent='Essay + Theory';res.setAttribute('aria-label','Open 28 Essay pages and 8 Theory documents')}
+  $$('.paper-card',home).forEach(card=>{const h=$('h3',card),c=$('.paper-count',card);if(!h||!c)return;const t=h.textContent.trim();let wanted='';if(t==='Day Papers')wanted='22 papers • 132 Q';else if(t==='Daily Quiz')wanted='23 quizzes • 115 Q';else if(t==='Lesson 1 Past Papers')wanted='44 MCQ';else if(t==='Lesson 2 Past Papers')wanted='56 MCQ';if(wanted&&c.textContent!==wanted)c.textContent=wanted});
 }
 function patchQuestionScroll(){
   const quiz=$('.quiz'); if(!quiz)return; const key=($('.counter',quiz)?.textContent||'')+'|'+($('.qtitle strong',quiz)?.textContent||'');
@@ -72,7 +76,9 @@ function patchProtectedPastPaperFrames(){
   $$('.source-frame').forEach(frame=>{if(frame.dataset.sourceFallback)return;const raw=frame.getAttribute('src')||'';const m=raw.match(/sources\/([A-Za-z0-9_-]+)\.pdf(?:#page=(\d+))?/);if(!m||!BROKEN_LOCAL_PAST.has(m[1]))return;const id=m[1],page=m[2]||'1';frame.dataset.sourceFallback='drive';frame.src=`https://drive.google.com/file/d/${id}/preview#page=${page}`;const card=frame.closest('.pdf-card');const link=card&&$('.source-link',card);if(link)link.href=`https://drive.google.com/file/d/${id}/view`;if(card&&!$('.fa-fallback-note',card)){const n=document.createElement('p');n.className='fa-fallback-note';n.textContent='Protected original PDF • direct source fallback is being used.';card.appendChild(n)}})
 }
 function audit(){patchHome();patchQuestionScroll();patchProtectedPastPaperFrames()}
-const obs=new MutationObserver(audit);obs.observe(document.documentElement,{subtree:true,childList:true});audit();
+let auditScheduled=false;
+function scheduleAudit(){if(auditScheduled)return;auditScheduled=true;requestAnimationFrame(()=>{auditScheduled=false;audit()})}
+const obs=new MutationObserver(scheduleAudit);obs.observe(app||document.body,{subtree:true,childList:true});scheduleAudit();
 
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('#res');if(!b)return;e.preventDefault();e.stopImmediatePropagation();openSources(true)},true);
 window.addEventListener('popstate',()=>{if(location.hash==='#sources')openSources(false);else if(location.hash.startsWith('#essay-')||location.hash.startsWith('#theory-'))openSources(false);else if(!location.hash)location.reload()});
