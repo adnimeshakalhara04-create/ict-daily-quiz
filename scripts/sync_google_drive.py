@@ -12,7 +12,8 @@ from googleapiclient.http import MediaFileUpload
 ROOT = Path(__file__).resolve().parents[1]
 INCOMING = ROOT / "incoming"
 ASSETS = ROOT / "daily_assets"
-REPORT_PATH = Path(os.environ.get("TELEGRAM_INGEST_REPORT", "/tmp/telegram-ingest.json"))
+TELEGRAM_REPORT = Path(os.environ.get("TELEGRAM_INGEST_REPORT", "/tmp/telegram-ingest.json"))
+DRIVE_BOOTSTRAP_REPORT = Path(os.environ.get("DRIVE_BOOTSTRAP_REPORT", "/tmp/drive-bootstrap.json"))
 
 # These are folder identifiers, not credentials. They match the existing Drive
 # structure used by ICT Daily Quiz 2028 and may be overridden with env vars.
@@ -41,7 +42,26 @@ def find_child(service, parent_id: str, name: str, mime_type: str | None = None)
         spaces="drive",
     ).execute()
     files = result.get("files", [])
-    return files[0] if files else None
+    if files:
+        return files[0]
+
+    # Some historical quiz folders contain accidental trailing spaces. Reuse
+    # them rather than creating duplicate folders with visually identical names.
+    if mime_type == FOLDER_MIME:
+        result = service.files().list(
+            q=(
+                f"'{parent_id}' in parents and mimeType = '{FOLDER_MIME}' "
+                "and trashed = false"
+            ),
+            fields="files(id,name,mimeType)",
+            pageSize=1000,
+            spaces="drive",
+        ).execute()
+        wanted = name.strip().casefold()
+        for row in result.get("files", []):
+            if row.get("name", "").strip().casefold() == wanted:
+                return row
+    return None
 
 
 def ensure_folder(service, parent_id: str, name: str) -> str:
@@ -104,19 +124,26 @@ def sync_quiz(service, quiz: int) -> None:
         )
 
 
+def report_quizzes() -> list[int]:
+    quizzes: set[int] = set()
+    for path in (DRIVE_BOOTSTRAP_REPORT, TELEGRAM_REPORT):
+        if not path.exists():
+            continue
+        report = json.loads(path.read_text(encoding="utf-8"))
+        for row in report.get("quizzes", []):
+            quizzes.add(int(row["quiz"]))
+    return sorted(quizzes)
+
+
 def main() -> None:
     raw_credentials = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
     if not raw_credentials:
         print("Drive sync skipped: GOOGLE_SERVICE_ACCOUNT_JSON is not configured.")
         return
-    if not REPORT_PATH.exists():
-        print(f"Drive sync skipped: ingest report not found at {REPORT_PATH}")
-        return
 
-    report = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
-    quizzes = [int(row["quiz"]) for row in report.get("quizzes", [])]
+    quizzes = report_quizzes()
     if not quizzes:
-        print("Drive sync: no new quiz pair to upload.")
+        print("Drive sync: no new or backfilled quiz pair to upload.")
         return
 
     info = json.loads(raw_credentials)
