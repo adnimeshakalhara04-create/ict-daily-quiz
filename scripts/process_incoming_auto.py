@@ -13,28 +13,20 @@ def main() -> None:
     while True:
         current = len(manifest["answers"])
         next_quiz = current + 1
-
         pair = groups.get(next_quiz)
-        if pair is not None:
-            if set(pair) != {"question", "marking"}:
-                print(
-                    f"Quiz {next_quiz:02d}: waiting for question + MARKING PDFs; "
-                    f"found {sorted(pair)}"
-                )
-                break
-            answers = base.process_quiz(next_quiz, pair["question"], pair["marking"])
-            manifest["answers"].append(answers)
-            print(f"Quiz {next_quiz:02d}: answers={answers}")
-            continue
 
-        # The repository already contains a verified prebuilt bridge for 21-23.
-        # Install it exactly when the sequential build reaches Quiz 20, then keep
-        # processing any incoming Quiz 24+ PDFs in the same run.
-        if current == 20:
-            base.install_prebuilt_21_23(manifest)
-            continue
+        if pair is None:
+            break
+        if set(pair) != {"question", "marking"}:
+            print(
+                f"Quiz {next_quiz:02d}: waiting for question + MARKING PDFs; "
+                f"found {sorted(pair)}"
+            )
+            break
 
-        break
+        answers = base.process_quiz(next_quiz, pair["question"], pair["marking"])
+        manifest["answers"].append(answers)
+        print(f"Quiz {next_quiz:02d}: answers={answers}")
 
     base.save_manifest(manifest)
     base.verify_all_assets(len(manifest["answers"]))
