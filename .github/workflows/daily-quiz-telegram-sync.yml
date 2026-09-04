@@ -1,0 +1,128 @@
+name: ICT Daily Quiz Telegram Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ict-daily-quiz-telegram-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TELEGRAM_CHANNEL: ictfromabc28
+      TELEGRAM_PROBE_REPORT: /tmp/telegram-probe.json
+      TELEGRAM_INGEST_REPORT: /tmp/telegram-ingest.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check automation secrets
+        id: gate
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+        shell: bash
+        run: |
+          if [[ -n "$TELEGRAM_API_ID" && -n "$TELEGRAM_API_HASH" && -n "$TELEGRAM_SESSION" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Telegram automation is installed but not activated yet. Configure TELEGRAM_API_ID, TELEGRAM_API_HASH and TELEGRAM_SESSION repository secrets."
+          fi
+
+      - name: Set up Python
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install automation dependencies
+        if: steps.gate.outputs.ready == 'true'
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check \
+            telethon pymupdf pillow google-api-python-client google-auth
+          npm install --no-save --package-lock=false --ignore-scripts puppeteer-core@24.16.0
+
+      - name: Probe Telegram public preview with Puppeteer
+        if: steps.gate.outputs.ready == 'true'
+        run: node scripts/telegram_probe.mjs
+
+      - name: Download new complete quiz pairs from Telegram
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+        run: python scripts/telegram_ingest.py
+
+      - name: Check whether a new quiz was downloaded
+        if: steps.gate.outputs.ready == 'true'
+        id: ingest
+        shell: bash
+        run: |
+          count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('/tmp/telegram-ingest.json')
+          if not path.exists():
+              print(0)
+          else:
+              print(len(json.loads(path.read_text()).get('quizzes', [])))
+          PY
+          )"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Downloaded complete quiz pairs: $count"
+
+      - name: Crop questions and markings and verify answers
+        if: steps.gate.outputs.ready == 'true' && steps.ingest.outputs.count != '0'
+        shell: bash
+        run: |
+          rm -f repairs/q14-marking-q02.part*.b64
+          cat repairs/q14-clean/part* > repairs/q14-marking-q02.part0.b64
+          python scripts/process_incoming_auto.py
+
+      - name: Sync raw PDFs and crops to Google Drive
+        if: steps.gate.outputs.ready == 'true' && steps.ingest.outputs.count != '0'
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/sync_google_drive.py
+
+      - name: Commit new source PDFs
+        if: steps.gate.outputs.ready == 'true' && steps.ingest.outputs.count != '0'
+        shell: bash
+        run: |
+          git restore quiz-data.json repairs 2>/dev/null || true
+          rm -rf daily_assets
+          git add incoming/*.pdf
+          if git diff --cached --quiet; then
+            echo "No new source PDF changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          quizzes="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('/tmp/telegram-ingest.json').read_text()).get('quizzes', [])
+          print(', '.join(f"{int(row['quiz']):02d}" for row in rows))
+          PY
+          )"
+          git commit -m "Auto: add ICT Daily Quiz ${quizzes} from Telegram"
+          git push
