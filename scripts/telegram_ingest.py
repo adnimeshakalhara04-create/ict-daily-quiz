@@ -31,8 +31,7 @@ def current_quiz_floor() -> int:
         match = QUIZ_RE.search(path.name)
         if match:
             current = max(current, int(match.group(1)))
-    # Quiz 21-23 are already present as a verified prebuilt bridge in this repo.
-    return max(current, 23)
+    return current
 
 
 def classify_message(message) -> tuple[int, str, str] | None:
