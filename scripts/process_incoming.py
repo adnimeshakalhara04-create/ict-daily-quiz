@@ -226,18 +226,50 @@ def meaningful_content_bottom(page: fitz.Page, top: float, hard_bottom: float) -
     return min(hard_bottom, max_y + 12)
 
 
-def find_question_starts(doc: fitz.Document) -> list[Start]:
-    found: dict[int, Start] = {}
+def find_question_starts(doc: fitz.Document, *, anchor_to_answers: bool = False) -> list[Start]:
+    candidates: dict[int, list[Start]] = {number: [] for number in range(1, 6)}
+    answer_positions: list[tuple[int, float]] = []
+
     for page_number, page in enumerate(doc):
         for block in page.get_text("dict").get("blocks", []):
             for line in block.get("lines", []):
                 text = line_text(line).strip()
+                bbox = line.get("bbox") or (0, 0, 0, 0)
+                y0 = float(bbox[1])
+
                 match = START_RE.match(text)
                 if match:
                     number = int(match.group(1))
-                    if number not in found:
-                        bbox = line.get("bbox") or (0, 0, 0, 0)
-                        found[number] = Start(number, page_number, float(bbox[1]))
+                    candidates[number].append(Start(number, page_number, y0))
+
+                if anchor_to_answers and ANSWER_RE.search(text):
+                    answer_positions.append((page_number, y0))
+
+    found: dict[int, Start] = {}
+    if anchor_to_answers:
+        if len(answer_positions) != 5:
+            raise RuntimeError(
+                f"Marking PDF: expected five Answer lines, found {len(answer_positions)}"
+            )
+        for number, answer_position in enumerate(answer_positions, 1):
+            eligible = [
+                start
+                for start in candidates[number]
+                if (start.page, start.y0) < answer_position
+            ]
+            if not eligible:
+                raise RuntimeError(
+                    f"Marking PDF: could not locate Question {number} before its Answer line"
+                )
+            # Marking explanations can contain numbered lists such as
+            # "2. Storage". The real question is the nearest matching numbered
+            # start immediately before that question's Answer line.
+            found[number] = max(eligible, key=lambda start: (start.page, start.y0))
+    else:
+        for number in range(1, 6):
+            if candidates[number]:
+                found[number] = candidates[number][0]
+
     if sorted(found) != [1, 2, 3, 4, 5]:
         raise RuntimeError(f"Could not uniquely locate question starts 1–5; found {sorted(found)}")
     starts = [found[number] for number in range(1, 6)]
@@ -310,7 +342,7 @@ def extract_answers(marking_doc: fitz.Document, starts: list[Start]) -> list[int
 def process_quiz(quiz: int, question_pdf: Path, marking_pdf: Path) -> list[int]:
     with fitz.open(question_pdf) as question_doc, fitz.open(marking_pdf) as marking_doc:
         question_starts = find_question_starts(question_doc)
-        marking_starts = find_question_starts(marking_doc)
+        marking_starts = find_question_starts(marking_doc, anchor_to_answers=True)
         answers = extract_answers(marking_doc, marking_starts)
         for kind, doc, starts in (("questions", question_doc, question_starts), ("markings", marking_doc, marking_starts)):
             target = ASSETS / kind / f"quiz-{quiz:02d}"
