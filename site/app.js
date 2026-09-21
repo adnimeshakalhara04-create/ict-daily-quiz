@@ -4,6 +4,7 @@
 
   const REPO = 'adnimeshakalhara04-create/ict-daily-quiz';
   const MANIFEST_URL = `https://raw.githubusercontent.com/${REPO}/main/quiz-data.json`;
+  const KEY_POINTS_URL = `https://raw.githubusercontent.com/${REPO}/main/key-points.json`;
   const ASSET_BASE = `https://raw.githubusercontent.com/${REPO}/main/daily_assets`;
 
   const fallbackAnswers = [
@@ -26,6 +27,17 @@
     console.warn('Daily Quiz manifest fallback:', error);
   }
 
+  let keyPoints = [];
+  try {
+    const response = await fetch(`${KEY_POINTS_URL}?v=${Date.now()}`, {cache: 'no-store'});
+    if (!response.ok) throw new Error(`key points HTTP ${response.status}`);
+    const payload = await response.json();
+    if (!Array.isArray(payload.points)) throw new Error('key points missing');
+    keyPoints = payload.points;
+  } catch (error) {
+    console.warn('Daily Quiz key-points fallback:', error);
+  }
+
   const latestQuiz = answers.length;
   const totalQuestions = latestQuiz * 5;
   const data = Array.from({length: latestQuiz}, (_, i) => ({
@@ -34,6 +46,7 @@
     questions: Array.from({length: 5}, (_, j) => ({
       number: j + 1,
       answer: answers[i][j],
+      point: keyPoints[i]?.[j] || '',
       question: `${ASSET_BASE}/questions/quiz-${String(i + 1).padStart(2, '0')}/q-${String(j + 1).padStart(2, '0')}.webp`,
       marking: `${ASSET_BASE}/markings/quiz-${String(i + 1).padStart(2, '0')}/q-${String(j + 1).padStart(2, '0')}.webp`
     }))
@@ -43,6 +56,7 @@
   let state = {screen:'home', mode:'all', paper:null, index:0, answers:{}, saved:[], zoom:''};
   try { const savedState = JSON.parse(localStorage.getItem(KEY) || 'null'); if (savedState) state = {...state, ...savedState, screen:'home', zoom:''}; } catch {}
   const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+  const escapeHtml = value => String(value).replace(/[&<>\"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[char]));
   const qkey = (p, q) => `p${p}q${q}`;
   const flat = () => state.mode === 'all' ? data.flatMap(p => p.questions.map(q => ({...q, paper:p.number, title:p.title}))) : state.paper.questions.map(q => ({...q, paper:state.paper.number, title:state.paper.title}));
   const answeredIn = p => p.questions.filter(q => state.answers[qkey(p.number, q.number)] !== undefined).length;
@@ -60,7 +74,7 @@
 
   function renderHome() {
     root.innerHTML=`<main class="home"><div class="wrap"><header class="header"><div class="brand"><span class="brand-badge">IT</span><span><strong>ICT Daily Quiz</strong><small>2028 QUIZ STUDIO</small></span></div><div class="pill">QUIZ 01–${String(latestQuiz).padStart(2,'0')} · AUTO UPDATED</div></header>
-      <section class="hero"><div><p class="eyebrow">Information & Communication Technology</p><h1>Turn every daily quiz<span>into exam-ready practice.</span></h1><p class="lead">Daily Quiz ${latestQuiz}ක ප්‍රශ්න ${totalQuestions}ම original question crop එකෙන් practice කරන්න. පිළිතුර තෝරාගත් පසු එම ප්‍රශ්නයටම අදාළ official marking crop එක බලන්න.</p><div class="actions"><button class="btn primary" data-all>Start all ${totalQuestions} questions →</button></div><div class="stats"><div><strong>${totalQuestions}</strong><span>QUESTIONS</span></div><div><strong>${latestQuiz}</strong><span>DAILY QUIZZES</span></div><div><strong>5</strong><span>CHOICES EACH</span></div></div></div>
+      <section class="hero"><div><p class="eyebrow">Information & Communication Technology</p><h1>Turn every daily quiz<span>into exam-ready practice.</span></h1><p class="lead">Daily Quiz ${latestQuiz}ක ප්‍රශ්න ${totalQuestions}ම original question crop එකෙන් practice කරන්න. පිළිතුර තෝරාගත් පසු official marking crop එකත්, ඒ source එකෙන්ම ගත්ත කෙටි තේරුම් ගන්න point එකත් බලන්න.</p><div class="actions"><button class="btn primary" data-all>Start all ${totalQuestions} questions →</button></div><div class="stats"><div><strong>${totalQuestions}</strong><span>QUESTIONS</span></div><div><strong>${latestQuiz}</strong><span>DAILY QUIZZES</span></div><div><strong>5</strong><span>CHOICES EACH</span></div></div></div>
       <div class="demo-wrap"><div class="orbit"></div><div class="orbit b"></div><div class="demo"><div class="demo-top"><span>LIVE PRACTICE</span><span>QUIZ 01</span></div><div class="track"><i></i></div><div class="mini">QUESTION 3 OF 5</div><h2>Choose your answer</h2><div class="answers-preview"><span>1</span><span>2</span><span class="on">3</span><span>4</span><span>5</span></div><div class="demo-ok"><b>✓</b><div><strong>Official marking review</strong><small>Exact crop from source</small></div></div></div></div></section>
       <section class="papers"><div class="section-head"><div><p class="eyebrow">DAILY QUIZ MODE</p><h2>QUIZ 01 සිට QUIZ ${String(latestQuiz).padStart(2,'0')} දක්වා</h2></div><p>Quiz එකක් තෝරලා ප්‍රශ්න 5ම එකින් එක practice කරන්න. Progress device එකේම save වෙනවා.</p></div><div class="paper-grid">${data.map(p=>{const a=answeredIn(p),pc=a/5*100;return`<button class="paper-card" data-paper="${p.number}"><div class="paper-top"><span class="paper-number">${String(p.number).padStart(2,'0')}</span><span class="paper-count">5 questions</span></div><h3>${p.title}</h3><div class="paper-progress"><i style="width:${pc}%"></i></div><div class="paper-foot"><span>${a?`${a}/5 completed`:'Not started'}</span><span>↗</span></div></button>`;}).join('')}</div></section>
       <footer class="footer"><span>Source: 2028 ICT Daily Quiz series · Original crops.</span><span>Quiz list updates from the verified GitHub manifest.</span></footer></div></main>`;
@@ -72,7 +86,7 @@
     const questions=flat(), q=questions[state.index], key=qkey(q.paper,q.number), picked=state.answers[key], done=picked!==undefined, correct=q.answer, saved=state.saved.includes(key), pct=(state.index+1)/questions.length*100;
     root.innerHTML=`<main class="quiz"><header class="quiz-header"><button class="icon" data-home>←</button><div class="qtitle"><small>${state.mode==='all'?'ALL QUIZZES':'QUIZ MODE'}</small><strong>${q.title}</strong></div><div class="counter">${state.index+1}/${questions.length}</div></header><div class="top-progress"><i style="width:${pct}%"></i></div><section class="stage"><div class="qmeta"><div><span class="qkicker">${q.title} · QUESTION ${q.number}</span><h1>Choose the correct answer</h1></div><button class="save ${saved?'on':''}" data-save>${saved?'★ Saved':'☆ Save'}</button></div>
       <div class="crop-card"><img src="${q.question}" alt="${q.title} Question ${q.number}" data-zoom="${q.question}"></div>
-      <div class="answer-box"><div class="answer-head"><strong>Your answer</strong><span>Select 1–5</span></div><div class="choices">${[1,2,3,4,5].map(n=>{let cls='';if(done)cls=n===correct?'correct':n===picked?'wrong':'dim';return`<button class="choice ${cls}" data-choice="${n}" ${done?'disabled':''}>${n}${cls==='correct'?'<i>✓</i>':cls==='wrong'?'<i>×</i>':''}</button>`;}).join('')}</div>${done?`<div class="feedback ${picked===correct?'good':'bad'}"><div class="mark">${picked===correct?'✓':'!'}</div><div><strong>${picked===correct?'Correct!':'Not quite — review the marking.'}</strong><p>The official marking answer is ${correct}.</p></div></div><section class="marking"><small>OFFICIAL MARKING REVIEW</small><h2>Why this answer is right or wrong</h2><img src="${q.marking}" alt="${q.title} Question ${q.number} marking" data-zoom="${q.marking}"></section>`:''}</div>
+      <div class="answer-box"><div class="answer-head"><strong>Your answer</strong><span>Select 1–5</span></div><div class="choices">${[1,2,3,4,5].map(n=>{let cls='';if(done)cls=n===correct?'correct':n===picked?'wrong':'dim';return`<button class="choice ${cls}" data-choice="${n}" ${done?'disabled':''}>${n}${cls==='correct'?'<i>✓</i>':cls==='wrong'?'<i>×</i>':''}</button>`;}).join('')}</div>${done?`<div class="feedback ${picked===correct?'good':'bad'}"><div class="mark">${picked===correct?'✓':'!'}</div><div><strong>${picked===correct?'Correct!':'Not quite — review the marking.'}</strong><p>The official marking answer is ${correct}.</p></div></div>${q.point?`<section class="key-point"><div class="key-point-top"><small>තේරුම් ගන්න POINT</small><span>Official marking PDF · exact source</span></div><p>${escapeHtml(q.point)}</p></section>`:""}<section class="marking"><small>OFFICIAL MARKING REVIEW</small><h2>Why this answer is right or wrong</h2><img src="${q.marking}" alt="${q.title} Question ${q.number} marking" data-zoom="${q.marking}"></section>`:''}</div>
       <div class="nav"><button data-prev ${state.index===0?'disabled':''}>← Previous</button><span>${q.title} · ${q.number}/5</span>${state.index===questions.length-1?'<button class="next" data-results>View results →</button>':'<button class="next" data-next>Next →</button>'}</div></section></main>`;
     root.querySelector('[data-home]').onclick=home; root.querySelector('[data-save]').onclick=toggleSave;
     root.querySelectorAll('[data-choice]').forEach(button=>button.onclick=()=>choose(Number(button.dataset.choice)));
