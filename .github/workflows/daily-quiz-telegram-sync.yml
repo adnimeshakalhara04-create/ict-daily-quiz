@@ -1,0 +1,147 @@
+name: ICT Daily Quiz Automation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/daily-quiz-telegram-sync.yml'
+      - 'scripts/telegram_ingest.py'
+      - 'scripts/bootstrap_drive_sources.py'
+      - 'scripts/sync_google_drive.py'
+      - 'scripts/process_incoming.py'
+      - 'scripts/process_incoming_auto.py'
+      - 'package.json'
+  schedule:
+    - cron: '37 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ict-daily-quiz-automation
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TELEGRAM_CHANNEL: ictfromabc28
+      TELEGRAM_INGEST_REPORT: /tmp/telegram-ingest.json
+      DRIVE_BOOTSTRAP_REPORT: /tmp/drive-bootstrap.json
+      DRIVE_RAW_PARENT_ID: 1I9fU_ojRQBS-U3_5slnkWGN_SIsgRjmN
+      DRIVE_CROP_PARENT_ID: 1mYROVvho24eDc3ys_OA2C2dmDq5cZ9NL
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify automation credentials are configured
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          missing=0
+          for key in TELEGRAM_API_ID TELEGRAM_API_HASH TELEGRAM_SESSION GOOGLE_SERVICE_ACCOUNT_JSON; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $key"
+              missing=1
+            fi
+          done
+          if [[ "$missing" != "0" ]]; then
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install automation dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            telethon pymupdf pillow google-api-python-client google-auth
+
+      - name: Backfill complete quiz pairs already in Google Drive
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/bootstrap_drive_sources.py
+
+      - name: Download new complete quiz pairs from Telegram
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+        run: python scripts/telegram_ingest.py
+
+      - name: Count new or backfilled quiz pairs
+        id: ingest
+        shell: bash
+        run: |
+          count="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          quizzes = set()
+          for filename in ('/tmp/drive-bootstrap.json', '/tmp/telegram-ingest.json'):
+              path = Path(filename)
+              if not path.exists():
+                  continue
+              for row in json.loads(path.read_text()).get('quizzes', []):
+                  quizzes.add(int(row['quiz']))
+          print(len(quizzes))
+          PY
+          )"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "New/backfilled complete quiz pairs: $count"
+
+      - name: Crop questions and markings and verify answers
+        if: steps.ingest.outputs.count != '0'
+        shell: bash
+        run: |
+          rm -f repairs/q14-marking-q02.part*.b64
+          cat repairs/q14-clean/part* > repairs/q14-marking-q02.part0.b64
+          python scripts/process_incoming_auto.py
+
+      - name: Sync raw PDFs and generated crops to Google Drive
+        if: steps.ingest.outputs.count != '0'
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/sync_google_drive.py
+
+      - name: Commit source PDFs for Vercel rebuild
+        if: steps.ingest.outputs.count != '0'
+        shell: bash
+        run: |
+          git restore quiz-data.json repairs 2>/dev/null || true
+          rm -rf daily_assets
+          git add incoming/*.pdf
+          if git diff --cached --quiet; then
+            echo "No new source PDF changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          quizzes="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          quizzes = set()
+          for filename in ('/tmp/drive-bootstrap.json', '/tmp/telegram-ingest.json'):
+              path = Path(filename)
+              if not path.exists():
+                  continue
+              for row in json.loads(path.read_text()).get('quizzes', []):
+                  quizzes.add(int(row['quiz']))
+          print(', '.join(f'{q:02d}' for q in sorted(quizzes)))
+          PY
+          )"
+          git commit -m "Auto: add ICT Daily Quiz ${quizzes} source PDFs"
+          git push origin HEAD:main
