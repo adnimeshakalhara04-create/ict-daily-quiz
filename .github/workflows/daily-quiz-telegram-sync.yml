@@ -145,3 +145,5 @@ jobs:
           )"
           git commit -m "Auto: add ICT Daily Quiz ${quizzes} source PDFs"
           git push origin HEAD:main
+
+# sync trigger: Quiz 52 Drive backfill
