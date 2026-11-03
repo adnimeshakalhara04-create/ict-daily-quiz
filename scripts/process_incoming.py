@@ -31,7 +31,8 @@ STITCH_GAP_PX = 14
 
 QUIZ_RE = re.compile(r"(?i)\bquiz[\s_-]*0*(\d{1,3})\b")
 START_RE = re.compile(r"^\s*([1-5])\.\s+\S")
-ANSWER_RE = re.compile(r"(?im)\bAnswer\s*:\s*([1-5])\s*\)")
+# Accept both "Answer: 2)" and zero-padded "Answer: 02)" in official marking PDFs.
+ANSWER_RE = re.compile(r"(?im)\bAnswer\s*:\s*0*([1-5])\s*\)")
 
 PREBUILT_ANSWERS = {
     21: [3, 2, 2, 2, 2],
