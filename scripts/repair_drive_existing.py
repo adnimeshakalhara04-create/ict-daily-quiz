@@ -16,7 +16,7 @@ from googleapiclient.discovery import build
 import sync_google_drive as existing
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
-FROM = int(os.getenv("REPAIR_FROM", "62"))
+FROM = int(os.getenv("REPAIR_FROM", "27"))
 TO = int(os.getenv("REPAIR_TO", "95"))
 if FROM < 1 or TO > 999 or FROM > TO:
     raise SystemExit("Invalid REPAIR_FROM/REPAIR_TO range")
@@ -80,11 +80,20 @@ def ensure_present(service, folder, path):
 
 def main():
     credential_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-    if not credential_json:
-        raise SystemExit("GOOGLE_SERVICE_ACCOUNT_JSON GitHub Actions secret is required")
-    credentials = service_account.Credentials.from_service_account_info(
-        json.loads(credential_json), scopes=existing.SCOPES
-    )
+    if credential_json:
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(credential_json), scopes=existing.SCOPES
+        )
+        print("Drive auth: service account")
+    else:
+        import google.auth
+        try:
+            credentials, _ = google.auth.default(scopes=existing.SCOPES)
+        except google.auth.exceptions.DefaultCredentialsError as exc:
+            raise SystemExit(
+                "No Drive credentials. In Colab call google.colab.auth.authenticate_user() first."
+            ) from exc
+        print("Drive auth: user OAuth / Google ADC")
     service = build("drive", "v3", credentials=credentials, cache_discovery=False)
     added = 0
     verified = 0
