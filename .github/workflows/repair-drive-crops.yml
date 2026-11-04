@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   repair:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       DRIVE_RAW_PARENT_ID: 1I9fU_ojRQBS-U3_5slnkWGN_SIsgRjmN
